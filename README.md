@@ -13,9 +13,19 @@ The ability to predict match duration has practical value for multiple stakehold
 
 ## Dataset
 
-**Source:** ATP Tour historical match data (~1.3M matches), originally in JSON format, converted to CSV via MongoDB. Filtered to matches played in **Japan only**.
+**Primary source:** ATP Tour historical match data (~1.3M matches), originally in JSON format, converted to CSV via MongoDB. The raw data was distributed as **57 year-by-year CSV files** (1968–2024) and **decade-by-decade ranking files** — the `scripts/` folder contains the scripts used to merge these into single files before any analysis.
 
-**Japan subset:** 21,375 matches, 16 original variables.
+**Japan subset:** 21,375 matches, 16 original variables. The primary dataset alone was insufficient for modelling: it lacked player nationality, full ranking history, and hand dominance. Three external sources were used to enrich it:
+
+| External file | Purpose |
+|---------------|---------|
+| `EXTERNAL_players.csv` | ~65K ATP players with nationality and hand dominance — used to fill `BornCountry`, `PlayerCountry`, `OpponentCountry`, `PlayerHand`, `OpponentHand`, `PlayerHeight`, `OpponentHeight`, `PlayerDOB`, `OpponentDOB` |
+| `EXTERNAL_players_fullname.csv` | Full name lookup for players whose names in the main dataset were abbreviated or inconsistent — needed to match records across sources |
+| `EXTERNAL_countries.csv` | ISO country code → full country name mapping — used to standardise the nationality fields extracted from the players file |
+
+The large raw files (`atp_db.csv`, `EXTERNAL_matches.csv`, `EXTERNAL_rankings.csv`) are not included due to size — see the Files section.
+
+**Original variables in the Japan subset:**
 
 | Variable | Description | Null % |
 |----------|-------------|--------|
@@ -98,15 +108,41 @@ All models struggled to reliably predict 3-set matches, reflecting the inherent 
 ## Files
 
 ```
-├── 01_data_preparation.ipynb      # Full data cleaning and feature engineering pipeline
-├── 02_modeling.ipynb              # 13 models + comparative evaluation and charts
-├── df_japan_final.xlsx            # Final preprocessed dataset (used by modeling notebook)
-├── EXTERNAL_countries.csv         # ISO country codes → full names
-├── EXTERNAL_players.csv           # Player metadata (~65K players)
-├── EXTERNAL_players_fullname.csv  # Player full name lookup
+├── 01_data_preparation.ipynb
+│   # Loads the Japan subset from atp_db.csv, applies all 15 feature engineering
+│   # steps using the external files, and exports df_japan_final.xlsx
+│
+├── 02_modeling.ipynb
+│   # Trains and evaluates 13 classification models; includes confusion matrices,
+│   # ROC curves, variable importance plots, and comparative AUC table
+│
+├── df_japan_final.xlsx
+│   # Fully preprocessed dataset — output of 01_data_preparation.ipynb.
+│   # This is the file fed directly into 02_modeling.ipynb.
+│
+├── EXTERNAL_players.csv
+│   # ~65K ATP players with nationality (BornCountry), dominant hand, height,
+│   # and date of birth. Used to enrich both PlayerName and Opponent fields.
+│   # 35 players not found here were filled manually.
+│
+├── EXTERNAL_players_fullname.csv
+│   # Maps abbreviated or inconsistent player names in atp_db.csv to their
+│   # canonical full names, enabling reliable joins with EXTERNAL_players.csv.
+│
+├── EXTERNAL_countries.csv
+│   # ISO 3166 country code → full country name. Used to convert the raw
+│   # nationality codes from EXTERNAL_players.csv into readable labels.
+│
 └── scripts/
-    ├── merge_matches.py           # Merges year-by-year ATP match CSVs (1968–2024)
-    └── merge_rankings.py          # Merges decade-by-decade ATP ranking CSVs
+    ├── merge_matches.py
+    │   # The raw ATP match data was distributed as 57 separate CSV files,
+    │   # one per year from 1968 to 2024. This script concatenates them into
+    │   # the single atp_db.csv used throughout the project.
+    │
+    └── merge_rankings.py
+        # ATP ranking data was split by decade. This script merges the
+        # decade files into EXTERNAL_rankings.csv, which is then used in
+        # data preparation to derive PlayerRank, OpponentRank, and RankDifference.
 ```
 
 > Large files not included: `atp_db.csv` (~385 MB), `EXTERNAL_matches.csv` (40 MB), `EXTERNAL_rankings.csv` (79 MB).
