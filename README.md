@@ -13,7 +13,7 @@ The ability to predict match duration has practical value for multiple stakehold
 
 ## Dataset
 
-**Primary source:** ATP Tour historical match data (~1.3M matches), originally in JSON format, converted to CSV via MongoDB. The raw data was distributed as **57 year-by-year CSV files** (1968–2024) and **decade-by-decade ranking files** — the `scripts/` folder contains the scripts used to merge these into single files before any analysis.
+**Primary source:** ATP Tour historical match data (~1.3M matches). The raw data existed as **individual JSON files per year (1968–2024)**. These were imported into a **MongoDB** database — which handles JSON natively — and then exported as year-by-year CSVs, resulting in **57 separate match CSV files** and **decade-by-decade ranking files**. The `scripts/` folder contains the scripts used to merge all of these into single flat files before any analysis.
 
 **Japan subset:** 21,375 matches, 16 original variables. The primary dataset alone was insufficient for modelling: it lacked player nationality, full ranking history, and hand dominance. Three external sources were used to enrich it:
 
