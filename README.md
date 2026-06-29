@@ -29,10 +29,12 @@ The large raw files (`atp_db.csv`, `EXTERNAL_matches.csv`, `EXTERNAL_rankings.cs
 
 | Variable | Description | Null % |
 |----------|-------------|--------|
+| `_id` | Unique row identifier | 0% |
 | `PlayerName` | Main player name | 0% |
 | `Born` | Player birthplace (city, country) | 29.5% |
 | `Height` | Player height (cm) | 29.7% |
 | `Hand` | Dominant hand | 13.5% |
+| `LinkPlayer` | URL to player profile | 0% |
 | `Tournament` | Tournament name | 0% |
 | `Location` | City and country | 0% |
 | `Date` | Tournament start and end date (combined) | 0% |
@@ -65,17 +67,39 @@ Extensive feature engineering was applied across 15 steps:
 | `Tournament` | Cleaned and standardised |
 | `PlayerHeight` / `OpponentHeight` / `HeightDifference` | Height matched from external data |
 | `PlayerDOB` / `OpponentDOB` / `AgeDiff` | Age difference at match date |
-| Round binary indicators | `RoundRobin`, `RoundQualifying`, `RoundPreFinals`, `RoundFinals` |
+| Round binary indicators | 5 binary flags created: `RoundRobin`, `RoundQualifying`, `RoundOf64to16`, `RoundPreFinals`, `RoundFinals` |
 | `PlayerWins` / `OpponentWins` / `WinDiff` | Historical win counts up to match date |
 
-**Final cleaning:** removed 5-set matches, exact duplicates, mirror duplicates (player ↔ opponent), and irrelevant columns.
+**Final cleaning:**
+
+| Step | Detail |
+|------|--------|
+| Remove 5-set matches | 132 games removed — Grand Slam format, not present in Japan tournaments |
+| Remove exact duplicates | 106 rows with identical values removed |
+| Remove mirror duplicates | 9,500 games where PlayerName ↔ Opponent were swapped (same match, two records) removed using a sorted key |
+| Drop irrelevant columns | `LinkPlayer`, `WL`, `Score` (replaced by `Sets`), `Player_ID`, `Opponent_ID`, `Ano` dropped |
+| Final validation | Confirmed no null values; 11,611 records remain (54.3% of the original 21,375 Japan matches) |
 
 ## Exploratory Data Analysis
 
-- Correlation matrix and VIF analysis to detect multicollinearity — all features passed (VIF < 5)
-- Distribution of `Sets`: ~70% end in 2 sets (imbalanced)
-- Round type vs. Sets: finals and semi-finals tend to go to more sets
-- `HeightDiff`, `AgeDiff`, `DiffHand`, `Ground`, `HomeFactor` analysed against the target
+**Correlation matrix** revealed three strong pairs signalling multicollinearity:
+- `RankDifference` ↔ `OpponentRank` (ρ = 0.98)
+- `HeightDiff` ↔ `OpponentHeight` (ρ = 0.97)
+- `WinDiff` ↔ `PlayerWins` (ρ = 0.83)
+
+**VIF analysis** confirmed the redundancies. Two variables were removed before modelling:
+- `RoundOf64to16` — VIF ≈ 2,344 (collinear with the other round indicators)
+- `WinDiff` — VIF 3.69 and directly derived from `PlayerWins` / `OpponentWins`
+
+The remaining 11 variables had controlled VIFs and were used in all models.
+
+**Distribution of `Sets`:** ~70% of matches end in 2 sets (class imbalance — central challenge throughout modelling).
+
+**Key findings from EDA:**
+- Finals and semi-finals have a higher proportion of 3-set matches
+- Smaller rank gaps between players tend to produce longer matches
+- `HeightDiff`, `AgeDiff`, `DiffHand`, `HomeFactor` show no clear separation between classes
+- Clay and Grass surfaces have slightly more 2-set matches; Hard and Carpet have more walkovers (0 sets)
 
 ## Models
 
@@ -83,11 +107,11 @@ Extensive feature engineering was applied across 15 steps:
 
 | Model | Algorithm | Strategy | Accuracy | AUC |
 |-------|-----------|----------|----------|-----|
-| 0 | Logistic Regression | None (baseline) | 0.704 | 0.547 |
+| 0 | Logistic Regression | None (baseline) | 0.704 | 0.559 |
 | 1 | Logistic Regression | Balanced weights | 0.480 | 0.553 |
 | 2 | Logistic Regression | Balanced + normalised | 0.484 | 0.560 |
-| **3** | **Decision Tree (depth=3)** | **Balanced weights** | **0.563** | **0.564** |
-| 4 | Random Forest | Balanced weights | 0.529 | 0.558 |
+| 3 | Decision Tree (depth=3) | Balanced weights | 0.563 | 0.564 |
+| **4** | **Random Forest** | **Balanced weights** | **0.529** | **0.558** |
 | 5 | XGBoost | `scale_pos_weight` | 0.558 | 0.545 |
 | 6 | Neural Network (MLP) | SMOTE + normalised | 0.533 | 0.498 |
 | 7 | Random Forest | Undersampling | 0.526 | 0.531 |
@@ -97,13 +121,15 @@ Extensive feature engineering was applied across 15 steps:
 | 11 | Random Forest (top 6) | Undersampling | 0.527 | 0.534 |
 | 12 | Logistic Regression (top 6) | Undersampling + normalised | 0.493 | 0.555 |
 
-**Best model:** Decision Tree (depth=3) with **AUC = 0.564** and the most balanced recall across both classes.
+Models 9–12 used the top 6 most important features identified from variable importance analysis across models 1–8:
+- Tree-based models (3, 4, 5, 7): `RankDifference`, `AgeDiff`, `OpponentWins`, `PlayerWins` most influential
+- Logistic regression models (0, 1, 2, 8): `RoundRobin`, `RoundFinals` had the highest coefficients
 
-Models 9–12 used the top 6 most important features identified from variable importance analysis across models 1–8.
+**Recommended model: Random Forest (Model 4)** — selected for its balance between recall on 3-set matches (~51%), competitive overall accuracy (~56%), and robustness for future implementation. It supports additional variables, tolerates imbalanced classes well, and generalises better than single-tree alternatives. The Decision Tree (Model 3) achieves the highest AUC (0.564) but was not selected as the final recommendation due to lower robustness.
 
 ## Conclusions
 
-All models struggled to reliably predict 3-set matches, reflecting the inherent unpredictability of tennis. The class imbalance (70/30) was the main modelling challenge — the baseline model simply predicted 2 sets for every match, achieving 70% accuracy while completely missing 3-set games. Balancing techniques improved recall for 3-set matches but reduced overall accuracy. The Decision Tree offered the best trade-off between interpretability and balanced performance.
+All models struggled to reliably predict 3-set matches, reflecting the inherent unpredictability of tennis. The class imbalance (70/30) was the main modelling challenge — the baseline model predicted 2 sets for every match, achieving 70% accuracy while completely missing 3-set games (recall 0%). Balancing techniques improved recall for 3-set matches but reduced overall accuracy. The recommended model (Random Forest, Model 4) offers the best combination of robustness, balanced recall (~51% on 3-set matches), and practical viability for deployment.
 
 ## Files
 
