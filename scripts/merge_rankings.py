@@ -2,7 +2,7 @@ import pandas as pd
 import glob
 
 # Caminho onde estão os ficheiros
-caminho = "C:/Users/joaoc/Desktop/ATP_JAPAO_FINAL/SCRIPT_ADICIONAL_RANKINGS"  
+caminho = "ranking_csvs"  # folder containing decade-by-decade ATP ranking CSV files
 ficheiros = glob.glob(f"{caminho}/atp_rankings_*.csv")
 
 # Lê e junta os ficheiros, ignorando cabeçalhos repetidos
