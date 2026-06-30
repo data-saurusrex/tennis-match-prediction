@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 # Caminho para a pasta onde estão os ficheiros CSV
-pasta_csvs = "C:/Users/joaoc/Desktop/ATP_JAPAO_FINAL/SCRIPT_ADICIONAL_MATCHES"
+pasta_csvs = "match_csvs"  # folder containing year-by-year ATP match CSV files
 
 # Lista todos os ficheiros CSV na pasta
 ficheiros = [f for f in os.listdir(pasta_csvs) if f.endswith('.csv')]
